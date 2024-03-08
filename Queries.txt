@@ -131,12 +131,56 @@ ORDER BY museum_id;
 
 
 # 12. Which are the top 5 most popular museum? (Popularity is defined based on most no of paintings in a museum).
-SELECT *
-FROM famous_painting.museum;
+SELECT m.museum_id,
+       m.name,
+       m.city,
+       m.country,
+       COUNT(*) AS no_of_paintings
+FROM famous_painting.museum m
+LEFT JOIN famous_painting.work w
+ON m.museum_id = w.museum_id
+GROUP BY m.museum_id, m.name, m.city, m.country
+ORDER BY no_of_paintings DESC
+LIMIT 5;
+
 
 # 13. Who are the top 5 most popular artist? (Popularity is defined based on most no of paintings done by an artist).
+SELECT a.artist_id,
+       a.full_name,
+       a.nationality,
+       COUNT(*) AS no_of_paintings
+FROM famous_painting.artist a
+LEFT JOIN famous_painting.work w
+ON a.artist_id = w.artist_id
+GROUP BY a.artist_id, a.full_name, a.nationality
+ORDER BY no_of_paintings DESC
+LIMIT 5;
+
 
 # 14. Display the 3 least popular canva sizes.
+-- There are some Nulls, hence the ps.work_id IS NOT NULL clause. Due to several ties for least popular sizes, we'll approach this with dense_rank
+SELECT
+  size_id, 
+  label,
+  no_of_paintings, 
+  rank
+FROM (
+  SELECT
+    cs.size_id, 
+    cs.label,
+    COUNT(*) AS no_of_paintings,
+    DENSE_RANK() OVER (ORDER BY COUNT(*) ASC) as rank
+  FROM
+    famous_painting.canvas_size cs
+  LEFT JOIN famous_painting.product_size ps 
+  ON cs.size_id = SAFE_CAST(ps.size_id AS INT)
+  WHERE ps.work_id IS NOT NULL
+  GROUP BY
+    cs.size_id, cs.label
+) AS ranked_sizes
+WHERE rank <= 3
+ORDER BY rank ASC;
+
 
 # 15. Which museum is open for the longest during a day? Return the museum name, state, hours open and day.
 -- clean the extra spaces typo in 2 time columns

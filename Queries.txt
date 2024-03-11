@@ -230,14 +230,48 @@ WHERE m.museum_id = (
   LIMIT 1
 );
 
+
 # 16. Which museum has the most no of most popular painting style?
+WITH cte_style_rank AS (
+SELECT style, 
+       COUNT(*) AS count, 
+       RANK() OVER(ORDER BY COUNT(*) DESC) AS rank_style
+FROM famous_painting.work
+WHERE style IS NOT NULL
+GROUP BY style)
+
+SELECT w.museum_id, m.name, w.style, w.no_of_paintings
+FROM (SELECT museum_id, 
+       style,
+       COUNT(*) AS no_of_paintings,
+       RANK() OVER(ORDER BY COUNT(*) DESC) AS rank_museum
+FROM famous_painting.work
+WHERE style = (SELECT style FROM cte_style_rank WHERE rank_style = 1) AND museum_id IS NOT NULL
+GROUP BY museum_id, style) AS w
+LEFT JOIN famous_painting.museum m
+ON w.museum_id = m.museum_id
+WHERE w.rank_museum = 1;
 
 
 # 17. Identify the artists whose paintings are displayed in multiple countries.
+WITH cte AS (
+    SELECT DISTINCT
+        a.full_name AS artist,
+        m.country
+    FROM famous_painting.work w
+        INNER JOIN famous_painting.artist a ON a.artist_id = w.artist_id
+        INNER JOIN famous_painting.museum m ON m.museum_id = w.museum_id
+)
+SELECT
+    artist,
+    COUNT(*) AS no_of_countries
+FROM cte
+GROUP BY artist
+HAVING COUNT(*) > 1
+ORDER BY no_of_countries DESC;
 
 
 # 18. Display the country and city with most no of museums. Return 2 seperate columns to mention the city and country. If there are multiple values, seperate them with comma.
-
 WITH cte_country AS 
   (SELECT country,
         COUNT(*),
@@ -259,7 +293,6 @@ CROSS JOIN cte_city
 WHERE cte_country.rank = 1 AND cte_city.rank = 1;
 
 # 19. Identify the artist and the museum where the most expensive and least expensive painting is placed. Display the artist name, sale_price, painting name, museum name, museum city and canvas label
-
 WITH cte AS (
 SELECT 
   *, 
@@ -287,7 +320,63 @@ ON SAFE_CAST(cte.size_id AS INT) = cs.size_id
 WHERE rank_expensive = 1 OR rank_cheap =1;
 
 # 20. Which country has the 5th highest no of paintings?
+WITH ranked_countries AS (
+  SELECT 
+  m.country, 
+  SUM(w.no_of_paintings) AS no_of_paintings, 
+  RANK() OVER(ORDER BY SUM(w.no_of_paintings) DESC) AS rank
+  FROM (
+    SELECT museum_id, COUNT(*) AS no_of_paintings
+    FROM famous_painting.work
+    WHERE museum_id IS NOT NULL
+    GROUP BY museum_id
+    ) AS w
+  LEFT JOIN famous_painting.museum m
+  ON w.museum_id = m.museum_id
+  GROUP BY m.country
+)
+
+SELECT *
+FROM ranked_countries
+WHERE rank = 5;
+
 
 # 21. Which are the 3 most popular and 3 least popular painting styles?
+WITH cte AS (
+  SELECT 
+    style, 
+    COUNT(*) AS no_of_paintings, 
+    RANK() OVER(ORDER BY COUNT(*) DESC) AS rank_popular, 
+    RANK() OVER(ORDER BY COUNT(*) ASC) AS rank_least_popular
+  FROM famous_painting.work
+  WHERE style IS NOT NULL 
+  GROUP BY style
+)
+
+SELECT *
+FROM cte
+WHERE 
+  rank_popular BETWEEN 1 AND 3 
+  OR rank_least_popular BETWEEN 1 AND 3
+ORDER BY 2 DESC;
+
 
 # 22. Which artist has the most no of Portraits paintings outside USA?. Display artist name, no of paintings and the artist nationality.
+SELECT 
+  a.full_name, 
+  a.nationality, 
+  COUNT(*) AS no_of_paintings
+FROM famous_painting.subject s
+INNER JOIN famous_painting.work w
+ON s.work_id = w.work_id
+INNER JOIN famous_painting.artist a
+ON w.artist_id = a.artist_id
+INNER JOIN famous_painting.museum m
+ON w.museum_id = m.museum_id
+WHERE 
+  s.subject = "Portraits"
+  AND m.country <> "USA"
+GROUP BY a.full_name, a.nationality
+ORDER BY no_of_paintings DESC
+LIMIT 1;
+
